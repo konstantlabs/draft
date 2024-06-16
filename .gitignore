@@ -1,0 +1,14 @@
+# JetBrains
+.idea/
+
+# Visual Studio Code
+.vscode/
+
+# Zed
+.zed/
+
+# Virtual Environments
+.venv/
+
+# Python
+__pycache__/
