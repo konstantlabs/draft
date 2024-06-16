@@ -36,11 +36,6 @@ if __name__ == '__main__':
     P = ca.SX.sym('P', 2 * n_states)
     X = ca.SX.sym('X', n_states, (N + 1))
 
-    # A vector that represents the states over the optimization problem.
-
-    obj = 0  # Objective function
-    g = []  # constraints vector
-
     Q = np.zeros((3, 3))
     Q[0, 0] = 1
     Q[1, 1] = 5
@@ -49,8 +44,9 @@ if __name__ == '__main__':
     R[0, 0] = 0.5
     R[1, 1] = 0.05  # weighing matrices (controls)
 
-    st = X[:,0]
+    st = X[:, 0]
 
+    obj = 0
     g = st - P[:3]
     for k in range(N):
         st = X[:, k]
