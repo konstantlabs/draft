@@ -1,171 +1,174 @@
 import time
 import casadi as ca
 import numpy as np
+import matplotlib.pyplot as plt
 
 
-if __name__ == '__main__':
-    dt = 0.2  # timestep in seconds
-    N = 10  # horizon
-    rob_diam = 0.3
+def unicycle_kinematics(x, u):
+    theta = x[2]
+    v = u[0]
+    omega = u[1]
 
-    v_max = 0.6
-    v_min = -v_max
-    omega_max = np.pi / 4
-    omega_min = -omega_max
-
-    x = ca.SX.sym('x')
-    y = ca.SX.sym('y')
-    theta = ca.SX.sym('theta')
-    states = ca.vertcat(x, y, theta)
-    n_states = states.numel()
-
-    v = ca.SX.sym('v')
-    omega = ca.SX.sym('omega')
-    controls = ca.vertcat(v, omega)
-    n_controls = controls.numel()
-    rhs = ca.vertcat(
+    return ca.vertcat(
         v * ca.cos(theta),
         v * ca.sin(theta),
         omega,
-    )  # system right-hand side
-
-    f = ca.Function('f', [states, controls], [rhs])  # nonlinear mapping function f(x,u)
-
-    U = ca.SX.sym('U', n_controls, N)
-
-    P = ca.SX.sym('P', 2 * n_states)
-    X = ca.SX.sym('X', n_states, (N + 1))
-
-    # A vector that represents the states over the optimization problem.
-
-    obj = 0  # Objective function
-    g = []  # constraints vector
-
-    Q = np.zeros((3, 3))
-    Q[0, 0] = 1
-    Q[1, 1] = 5
-    Q[2, 2] = 0.1  # weighing matrices (states)
-    R = np.zeros((2, 2))
-    R[0, 0] = 0.5
-    R[1, 1] = 0.05  # weighing matrices (controls)
-
-    st = X[:,0]
-
-    g = st - P[:3]
-    for k in range(N):
-        st = X[:, k]
-        u = U[:, k]
-        obj += ca.mtimes((st - P[3:6]).T, ca.mtimes(Q, (st - P[3:6]))) + ca.mtimes(u.T, ca.mtimes(R, u))
-        st += f(st, u) * dt
-        g = ca.vertcat(g, X[:, k + 1] - st)
-
-    # make the decision variable one column vector
-    OPT_variables = ca.vertcat(
-        ca.reshape(X, n_states * (N + 1), 1),
-        ca.reshape(U, n_controls * N, 1),
     )
 
-    nlp_prob = {
-        'f': obj,
-        'x': OPT_variables,
-        'g': g,
-        'p': P,
-    }
 
-    opts = {
-        'print_time': 0,
-        'ipopt': {
-            'max_iter': 2000,
-            'print_level': 0,
-            'acceptable_tol': 1e-8,
-            'acceptable_obj_change_tol': 1e-6
-        }
-    }
+def diff_drive_kinematics(x, u):
+    r = 1
+    d = 1
+    theta = x[2]
+    u_l = u[0] - u[1]
+    u_r = u[0] + u[1]
 
-    solver = ca.nlpsol('solver', 'ipopt', nlp_prob, opts)
+    return ca.vertcat(
+        r / 2 * ca.cos(theta) * (u_r + u_l),
+        r / 2 * ca.sin(theta) * (u_r + u_l),
+        r / (2 * d) * (u_r - u_l),
+    )
 
-    args = {
-        'lbg': np.zeros((3 * (N + 1), 1)),
-        'ubg': np.zeros((3 * (N + 1), 1)),
-        'lbx': np.zeros((3 * (N + 1) + 2 * N, 1)),
-        'ubx': np.zeros((3 * (N + 1) + 2 * N, 1))
-    }
 
-    args['lbx'][:3*(N+1):3, 0] = -2  # state x lower bound
-    args['ubx'][:3*(N+1):3, 0] = 2  # state x upper bound
-    args['lbx'][1:3*(N+1):3, 0] = -2  # state y lower bound
-    args['ubx'][1:3*(N+1):3, 0] = 2  # state y upper bound
-    args['lbx'][2:3*(N+1):3, 0] = -np.inf  # state theta lower bound
-    args['ubx'][2:3*(N+1):3, 0] = np.inf  # state theta upper bound
+if __name__ == "__main__":
+    N = 15
+    num_states = 3
+    num_inputs = 2
 
-    args['lbx'][3 * (N + 1):(3 * (N + 1) + 2 * N):2, 0] = v_min  # v lower bound
-    args['ubx'][3 * (N + 1):(3 * (N + 1) + 2 * N):2, 0] = v_max  # v upper bound
-    args['lbx'][3 * (N + 1) + 1:(3 * (N + 1) + 2 * N):2, 0] = omega_min  # omega lower bound
-    args['ubx'][3 * (N + 1) + 1:(3 * (N + 1) + 2 * N):2, 0] = omega_max  # omega upper bound
+    opti = ca.Opti()
+    x = opti.variable(num_states, N + 1)
+    u = opti.variable(num_inputs, N)
+    x0 = opti.parameter(num_states)
+    r = opti.parameter(num_states)
 
-    t = np.arange(0, 20, dt)
+    J = 0  # objective function
 
-    # Initial conditions
-    u0 = np.zeros((2, N))
-    x0 = np.zeros((3, 1))
+    # vehicle dynamics
+    f = diff_drive_kinematics
 
-    # Reference
-    r = np.array([[1.5], [1.5], [0.0]])
+    Q = np.diag([1.0, 5.0, 0.1])  # state weighing matrix
+    R = np.diag([0.5, 0.05])  # controls weighing matrix
 
-    # History bufffers (state, horizon, and control trajectories)
-    x_trajectory = np.zeros((3, len(t)))
-    x_trajectory[:, 0] = x0.T.flatten()
-    u_trajectory = []
-    horizon_trajectory = []
+    T = 50
+    dt = 0.2
 
-    X = np.tile(x0, (1, N + 1))
+    for k in range(N):
+        J += ca.mtimes((x[:, k] - r).T, ca.mtimes(Q, (x[:, k] - r))) + ca.mtimes(
+            u[:, k].T, ca.mtimes(R, u[:, k])
+        )
 
-    xk = x0
-    u = u0
+        x_next = x[:, k] + f(x[:, k], u[:, k]) * dt
+        opti.subject_to(x[:, k + 1] == x_next)
+
+    opti.minimize(J)
+
+    opti.subject_to(x[:, 0] == x0)
+
+    opti.subject_to(u[0, :] >= -1)
+    opti.subject_to(u[0, :] <= 1)
+    opti.subject_to(u[1, :] >= -np.pi / 4)
+    opti.subject_to(u[1, :] <= np.pi / 4)
+
+    opti.set_value(x0, ca.vertcat(0, 0, 0))
+    opti.set_value(r, ca.vertcat(1.5, 15, np.pi / 2))
+
     k = 0
+    x_current = x0
 
-    start_time = time.time()
-    while np.linalg.norm(xk - r) > 1e-2 and k < len(t) - 1:
-        print(f"x={xk.flatten()}")
-        print(f"r={r.flatten()}")
+    p_opts = {
+        "expand": True,
+    }
+    s_opts = {
+        "max_iter": 1000,
+        "print_level": 0,
+        "acceptable_tol": 1e-8,
+        "acceptable_obj_change_tol": 1e-6,
+    }
 
-        args['p'] = np.vstack((xk, r))
-        args['x0'] = ca.vertcat(
-            X.reshape((3 * (N + 1), 1)),
-            u.reshape((2 * N), 1),
-        )
+    opti.solver("ipopt", p_opts, s_opts)
 
-        print(f"x0={args['x0'][:3]}")
+    x_history = np.zeros((num_states, int(T / dt)))
+    u_history = np.zeros((num_inputs, int(T / dt)))
+    error_history = np.zeros((num_states, int(T / dt)))
 
-        sol = solver(
-            x0=args['x0'],
-            lbx=args['lbx'],
-            ubx=args['ubx'],
-            lbg=args['lbg'],
-            ubg=args['ubg'],
-            p=args['p'],
-        )
+    start = time.time()
+    x_current = opti.value(x0)
+    while np.linalg.norm(x_current - opti.value(r)) > 1e-2 and k < T / dt:
+        inner_start = time.time()
+        error = np.linalg.norm(x_current - opti.value(r))
+        error_x = np.linalg.norm(x_current[0] - opti.value(r)[0])
+        error_y = np.linalg.norm(x_current[1] - opti.value(r)[1])
+        error_theta = np.linalg.norm(x_current[2] - opti.value(r)[2])
+        error_history[:, k] = [error_x, error_y, error_theta]
 
-        # get controls only from the solution
-        u = (
-            sol['x'][3 * (N + 1):]
-            .full()
-            .reshape((2, N))
-        )
+        print(f"Step = {k} Timestep = {k * dt:.2f} Error = {error:.4f}")
 
-        xk = (xk + f(xk, u[:, 0]) * dt).full()
+        opti.set_value(x0, x_current)
+        sol = opti.solve()
+        u_opt = sol.value(u)
+        x_history[:, k] = x_current
+        u_history[:, k] = u_opt[:, 0]
+        x_current = x_current + f(x_current, u_opt[:, 0]).full().flatten() * dt
 
-        u = np.hstack((u[:, 1:], u[:, -1:]))  # shift controls
-
-        X = (
-            sol['x'][:3 * (N + 1)]
-            .full()
-            .reshape((3, N + 1))
-        )  # predicted trajectory
-
-        X = np.hstack((X[:, 1:], X[:, -1:]))  # shift predicted trajectory
         k += 1
 
-        print(f"dt={t[k]}, error={np.linalg.norm(xk - r)}")
+        print(f"MPC time step: {(time.time() - inner_start):.4f}")
 
-    end_time = time.time()
+    print(f"Total MPC time: {(time.time() - start):.2f}")
+
+    t = np.arange(0, T, dt)
+
+    x_des, y_des, theta_des = opti.value(r)
+    xt_des = np.full(len(t), x_des)
+    yt_des = np.full(len(t), y_des)
+    thetat_des = np.full(len(t), theta_des)
+
+    plt.figure(figsize=(8, 6))
+    plt.plot(x_history[0, :], x_history[1, :])
+    plt.plot(x_des, y_des, "ro", markersize=10)
+    plt.xlabel("$x$ [$m$]")
+    plt.ylabel("$y$ [$m$]")
+    plt.title("Unicycle Trajectory (MPC)")
+    plt.grid(True)
+
+    plt.figure(figsize=(12, 8))
+    plt.subplot(2, 2, 1)
+    plt.plot(t, x_history[0, :], label="$x$")
+    plt.plot(t, xt_des, "--", label="$x_d$")
+    plt.plot(t, x_history[1, :], label="$y$")
+    plt.plot(t, yt_des, "--", label="$y_d$")
+    plt.xlabel("Time [$s$]")
+    plt.ylabel("Position [$m$]")
+    plt.title("Vehicle Position")
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(2, 2, 2)
+    plt.plot(t, np.mod(x_history[2, :], 2 * np.pi), label=r"$\theta$")
+    plt.xlabel("Time [$s$]")
+    plt.ylabel(r"$\theta$ [$rad$]")
+    plt.title("Vehicle Orientation")
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(2, 2, 3)
+    plt.plot(t, u_history[0, :], label=r"$v$")
+    plt.plot(t, u_history[1, :], label=r"$\omega$")
+    plt.xlabel("Time [$s$]")
+    plt.ylabel("Control Input")
+    plt.title("Vehicle Control")
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(2, 2, 4)
+    plt.plot(t, error_history[0, :], label="error$_x$")
+    plt.plot(t, error_history[1, :], label="error$_y$")
+    plt.plot(t, error_history[2, :], label=r"error$_\theta$")
+    plt.xlabel("Time [$s$]")
+    plt.ylabel("Error [$m$]")
+    plt.title("Pose error")
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
