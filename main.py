@@ -27,7 +27,7 @@ if __name__ == '__main__':
         v * ca.cos(theta),
         v * ca.sin(theta),
         omega,
-    )  # system right-hand side
+    )
 
     f = ca.Function('f', [states, controls], [rhs])  # nonlinear mapping function f(x,u)
 
@@ -36,13 +36,8 @@ if __name__ == '__main__':
     P = ca.SX.sym('P', 2 * n_states)
     X = ca.SX.sym('X', n_states, (N + 1))
 
-    Q = np.zeros((3, 3))
-    Q[0, 0] = 1
-    Q[1, 1] = 5
-    Q[2, 2] = 0.1  # weighing matrices (states)
-    R = np.zeros((2, 2))
-    R[0, 0] = 0.5
-    R[1, 1] = 0.05  # weighing matrices (controls)
+    Q = np.diag([1.0, 5.0, 0.1])  # state weighing matrix
+    R = np.diag([0.5, 0.05])  # controls weighing matrix
 
     st = X[:, 0]
 
@@ -54,6 +49,8 @@ if __name__ == '__main__':
         obj += ca.mtimes((st - P[3:6]).T, ca.mtimes(Q, (st - P[3:6]))) + ca.mtimes(u.T, ca.mtimes(R, u))
         st += f(st, u) * dt
         g = ca.vertcat(g, X[:, k + 1] - st)
+
+    print(g.shape)
 
     # make the decision variable one column vector
     OPT_variables = ca.vertcat(
