@@ -87,11 +87,49 @@ if __name__ == '__main__':
 
         k += 1
 
+    t = np.arange(0, T, dt)
+
+    x_des, y_des, theta_des = opti.value(r)
+    xt_des = np.full(len(t), x_des)
+    yt_des = np.full(len(t), y_des)
+    thetat_des = np.full(len(t), theta_des)
+
     plt.figure(figsize=(8, 6))
     plt.plot(x_history[0, :], x_history[1, :])
-    plt.plot(opti.value(r)[0], opti.value(r)[1], 'ro', markersize=10)
+    plt.plot(x_des, y_des, 'ro', markersize=10)
     plt.xlabel('$x$ [$m$]')
     plt.ylabel('$y$ [$m$]')
     plt.title('Unicycle Trajectory (MPC)')
     plt.grid(True)
+
+    plt.figure(figsize=(12, 8))
+    plt.subplot(3, 1, 1)
+    plt.plot(t, x_history[0, :], label='$x$')
+    plt.plot(t, xt_des, '--', label='$x_d$')
+    plt.plot(t, x_history[1, :], label='$y$')
+    plt.plot(t, yt_des, '--', label='$y_d$')
+    plt.xlabel('Time [$s$]')
+    plt.ylabel('Position [$m$]')
+    plt.title('Vehicle Position')
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(3, 1, 2)
+    plt.plot(t, np.mod(x_history[2, :], 2 * np.pi), label=r'$\theta$')
+    plt.xlabel('Time [$s$]')
+    plt.ylabel(r'$\theta$ [$rad$]')
+    plt.title('Vehicle Orientation')
+    plt.legend()
+    plt.grid(True)
+
+    plt.subplot(3, 1, 3)
+    plt.plot(t, u_history[0, :], label=r'$v$')
+    plt.plot(t, u_history[1, :], label=r'$\omega$')
+    plt.xlabel('Time [$s$]')
+    plt.ylabel('Control Input')
+    plt.title('Vehicle Control')
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
     plt.show()
