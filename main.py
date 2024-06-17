@@ -4,28 +4,52 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def unicycle_kinematics(x, u):
+    theta = x[2]
+    v = u[0]
+    omega = u[1]
+
+    return ca.vertcat(
+        v * ca.cos(theta),
+        v * ca.sin(theta),
+        omega,
+    )
+
+
+def diff_drive_kinematics(x, u):
+    r = 1
+    d = 1
+    theta = x[2]
+    u_l = u[0] - u[1]
+    u_r = u[0] + u[1]
+
+    return ca.vertcat(
+        r / 2 * ca.cos(theta) * (u_r + u_l),
+        r / 2 * ca.sin(theta) * (u_r + u_l),
+        r / (2 * d) * (u_r - u_l),
+    )
+
+
 if __name__ == "__main__":
     N = 15
+    num_states = 3
+    num_inputs = 2
 
     opti = ca.Opti()
-    x = opti.variable(3, N + 1)
-    u = opti.variable(2, N)
-    x0 = opti.parameter(3)
-    r = opti.parameter(3)
+    x = opti.variable(num_states, N + 1)
+    u = opti.variable(num_inputs, N)
+    x0 = opti.parameter(num_states)
+    r = opti.parameter(num_states)
 
     J = 0  # objective function
 
     # vehicle dynamics
-    f = lambda x, u: ca.vertcat(
-        u[0] * ca.cos(x[2]),
-        u[0] * ca.sin(x[2]),
-        u[1],
-    )
+    f = diff_drive_kinematics
 
     Q = np.diag([1.0, 5.0, 0.1])  # state weighing matrix
     R = np.diag([0.5, 0.05])  # controls weighing matrix
 
-    T = 20
+    T = 50
     dt = 0.2
 
     for k in range(N):
@@ -40,19 +64,13 @@ if __name__ == "__main__":
 
     opti.subject_to(x[:, 0] == x0)
 
-    # opti.subject_to(x[0, :] >= -2)
-    # opti.subject_to(x[0, :] <= 2)
-    # opti.subject_to(x[1, :] >= -2)
-    # opti.subject_to(x[1, :] <= 2)
-    opti.subject_to(x[2, :] >= -np.inf)
-    opti.subject_to(x[2, :] <= np.inf)
     opti.subject_to(u[0, :] >= -1)
     opti.subject_to(u[0, :] <= 1)
     opti.subject_to(u[1, :] >= -np.pi / 4)
     opti.subject_to(u[1, :] <= np.pi / 4)
 
     opti.set_value(x0, ca.vertcat(0, 0, 0))
-    opti.set_value(r, ca.vertcat(1.5, 15, 0))
+    opti.set_value(r, ca.vertcat(1.5, 15, np.pi / 2))
 
     k = 0
     x_current = x0
@@ -69,9 +87,9 @@ if __name__ == "__main__":
 
     opti.solver("ipopt", p_opts, s_opts)
 
-    x_history = np.zeros((3, int(T / dt)))
-    u_history = np.zeros((2, int(T / dt)))
-    error_history = np.zeros((3, int(T / dt)))
+    x_history = np.zeros((num_states, int(T / dt)))
+    u_history = np.zeros((num_inputs, int(T / dt)))
+    error_history = np.zeros((num_states, int(T / dt)))
 
     start = time.time()
     x_current = opti.value(x0)
