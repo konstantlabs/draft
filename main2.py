@@ -49,7 +49,7 @@ if __name__ == '__main__':
     opti.subject_to(u[1, :] <= np.pi / 4)
 
     opti.set_value(x0, ca.vertcat(0, 0, 0))
-    opti.set_value(r, ca.vertcat(1.5, 1.5, 0.0))
+    opti.set_value(r, ca.vertcat(1.5, -2, np.pi / 2))
 
     k = 0
     x_current = x0
@@ -66,27 +66,14 @@ if __name__ == '__main__':
 
     opti.solver("ipopt", p_opts, s_opts)
 
-    sol: ca.OptiSol = opti.solve()
+    x_current = opti.value(x0)
+    while np.linalg.norm(x_current - opti.value(r)) > 1e-2 and k < T / dt:
+        error = np.linalg.norm(x_current - opti.value(r))
+        print(f"Step {k}: Error = {error:.4f}")
 
-    # print(sol.value(u))
-    print(opti.value(r))
-    x_current = ca.vertcat(1.5, 1.5, 0.0)
-    # while np.linalg.norm(x_current - r.get_value()) > 1e-2 and k < T / dt:
-    #     opti.set_value(x0, x_current)
+        opti.set_value(x0, x_current)
+        sol = opti.solve()
+        u_opt = sol.value(u)
+        x_current = x_current + dt * f(x_current, u_opt[:, 0])
 
-    #     # Solve the MPC problem
-    #     opti.solver("ipopt", p_opts, s_opts)
-    #     print(opti.output("r"))
-
-    #     break
-    #     sol = opti.solve()
-
-    #     # Extract the optimal control sequence and apply the first control
-    #     u_opt = sol.value(u)
-
-    #     error = np.linalg.norm(x_current - r.value())
-    #     print(f"Step {k}: Error = {error:.4f}")
-
-    #     x_current = x_current + dt * f(x_current, u_opt[:, 0])
-
-    #     k += 1
+        k += 1
