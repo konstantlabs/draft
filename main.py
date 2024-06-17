@@ -39,19 +39,19 @@ if __name__ == '__main__':
 
     opti.subject_to(x[:, 0] == x0)
 
-    opti.subject_to(x[0, :] >= -2)
-    opti.subject_to(x[0, :] <= 2)
-    opti.subject_to(x[1, :] >= -2)
-    opti.subject_to(x[1, :] <= 2)
+    # opti.subject_to(x[0, :] >= -2)
+    # opti.subject_to(x[0, :] <= 2)
+    # opti.subject_to(x[1, :] >= -2)
+    # opti.subject_to(x[1, :] <= 2)
     opti.subject_to(x[2, :] >= -np.inf)
     opti.subject_to(x[2, :] <= np.inf)
-    opti.subject_to(u[0, :] >= -0.6)
-    opti.subject_to(u[0, :] <= 0.6)
+    opti.subject_to(u[0, :] >= -1)
+    opti.subject_to(u[0, :] <= 1)
     opti.subject_to(u[1, :] >= -np.pi / 4)
     opti.subject_to(u[1, :] <= np.pi / 4)
 
     opti.set_value(x0, ca.vertcat(0, 0, 0))
-    opti.set_value(r, ca.vertcat(1.5, -2, 0))
+    opti.set_value(r, ca.vertcat(1.5, 15, 0))
 
     k = 0
     x_current = x0
