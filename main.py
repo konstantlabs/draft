@@ -16,6 +16,22 @@ def unicycle_kinematics(x, u):
     )
 
 
+def unicycle_dynamics(x, u):
+    theta = x[2]
+    v = x[3]
+    omega = x[4]
+    a = u[0]
+    alpha = u[1]
+
+    return ca.vertcat(
+        v * ca.cos(theta),
+        v * ca.sin(theta),
+        omega,
+        a,
+        alpha,
+    )
+
+
 def diff_drive_kinematics(x, u):
     r = 1
     d = 1
@@ -31,8 +47,8 @@ def diff_drive_kinematics(x, u):
 
 
 if __name__ == "__main__":
-    N = 15
-    num_states = 3
+    N = 20
+    num_states = 5
     num_inputs = 2
 
     opti = ca.Opti()
@@ -44,12 +60,12 @@ if __name__ == "__main__":
     J = 0  # objective function
 
     # vehicle dynamics
-    f = diff_drive_kinematics
+    f = unicycle_dynamics
 
-    Q = np.diag([1.0, 5.0, 0.1])  # state weighing matrix
+    Q = np.diag([1.0, 5.0, 0.1, 10.0, 5.0])  # state weighing matrix
     R = np.diag([0.5, 0.05])  # controls weighing matrix
 
-    T = 50
+    T = 100
     dt = 0.2
 
     for k in range(N):
@@ -64,13 +80,13 @@ if __name__ == "__main__":
 
     opti.subject_to(x[:, 0] == x0)
 
-    opti.subject_to(u[0, :] >= -1)
-    opti.subject_to(u[0, :] <= 1)
-    opti.subject_to(u[1, :] >= -np.pi / 4)
-    opti.subject_to(u[1, :] <= np.pi / 4)
+    opti.subject_to(u[0, :] >= -2)
+    opti.subject_to(u[0, :] <= 2)
+    opti.subject_to(u[1, :] >= -2)
+    opti.subject_to(u[1, :] <= 2)
 
-    opti.set_value(x0, ca.vertcat(0, 0, 0))
-    opti.set_value(r, ca.vertcat(1.5, 15, np.pi / 2))
+    opti.set_value(x0, ca.vertcat(0, 0, 0, 0, 0))
+    opti.set_value(r, ca.vertcat(1.5, 15, 0, 0, 0))
 
     k = 0
     x_current = x0
@@ -93,13 +109,13 @@ if __name__ == "__main__":
 
     start = time.time()
     x_current = opti.value(x0)
-    while np.linalg.norm(x_current - opti.value(r)) > 1e-2 and k < T / dt:
+    while np.linalg.norm(x_current - opti.value(r)) > 1e-3 and k < T / dt:
         inner_start = time.time()
         error = np.linalg.norm(x_current - opti.value(r))
         error_x = np.linalg.norm(x_current[0] - opti.value(r)[0])
         error_y = np.linalg.norm(x_current[1] - opti.value(r)[1])
         error_theta = np.linalg.norm(x_current[2] - opti.value(r)[2])
-        error_history[:, k] = [error_x, error_y, error_theta]
+        error_history[:, k] = [error_x, error_y, error_theta, 0, 0]
 
         print(f"Step = {k} Timestep = {k * dt:.2f} Error = {error:.4f}")
 
@@ -118,7 +134,7 @@ if __name__ == "__main__":
 
     t = np.arange(0, T, dt)
 
-    x_des, y_des, theta_des = opti.value(r)
+    x_des, y_des, theta_des, v_des, omega_des = opti.value(r)
     xt_des = np.full(len(t), x_des)
     yt_des = np.full(len(t), y_des)
     thetat_des = np.full(len(t), theta_des)
