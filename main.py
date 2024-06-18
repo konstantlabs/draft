@@ -111,11 +111,15 @@ if __name__ == "__main__":
     x_current = opti.value(x0)
     while np.linalg.norm(x_current - opti.value(r)) > 1e-3 and k < T / dt:
         inner_start = time.time()
+
         error = np.linalg.norm(x_current - opti.value(r))
-        error_x = np.linalg.norm(x_current[0] - opti.value(r)[0])
-        error_y = np.linalg.norm(x_current[1] - opti.value(r)[1])
-        error_theta = np.linalg.norm(x_current[2] - opti.value(r)[2])
-        error_history[:, k] = [error_x, error_y, error_theta, 0, 0]
+
+        error_x, error_y, error_theta, error_v, error_omega = np.linalg.norm(
+            x_current.reshape(-1, 1) - opti.value(r).reshape(-1, 1),
+            axis=1,
+        )
+
+        error_history[:, k] = [error_x, error_y, error_theta, error_v, error_omega]
 
         print(f"Step = {k} Timestep = {k * dt:.2f} Error = {error:.4f}")
 
