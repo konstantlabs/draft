@@ -6,6 +6,22 @@ import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline
 
 
+def unicycle_dynamics(x, u):
+    theta = x[2]
+    v = x[3]
+    omega = x[4]
+    a = u[0]
+    alpha = u[1]
+
+    return ca.vertcat(
+        v * ca.cos(theta),
+        v * ca.sin(theta),
+        omega,
+        a,
+        alpha,
+    )
+
+
 def unicycle_kinematics(x, u):
     theta = x[2]
     v = u[0]
@@ -44,8 +60,8 @@ def spline_trajectory(t, points):
 
 
 if __name__ == "__main__":
-    N = 5
-    num_states = 3
+    N = 10
+    num_states = 5
     num_inputs = 2
 
     opti = ca.Opti()
@@ -57,27 +73,29 @@ if __name__ == "__main__":
     J = 0  # objective function
 
     # vehicle dynamics
-    f = diff_drive_kinematics
+    f = unicycle_dynamics
 
-    Q = np.diag([329, 329, 20.0])  # state weighing matrix
-    R = np.diag([0.5, 0.01])  # controls weighing matrix
+    Q = np.diag([3000, 3000, 10.0])  # state weighing matrix
+    R = np.diag([0.1, 0.01])  # controls weighing matrix
 
-    T = 50
+    T = 100
     dt = 0.2
 
     for k in range(N):
-        J += (x[:, k] - r[:, k]).T @ Q @ (x[:, k] - r[:, k]) + u[:, k].T @ R @ u[:, k]
+        J += (x[:3, k] - r[:3, k]).T @ Q @ (x[:3, k] - r[:3, k]) + u[:, k].T @ R @ u[
+            :, k
+        ]
         x_next = x[:, k] + f(x[:, k], u[:, k]) * dt
         opti.subject_to(x[:, k + 1] == x_next)
 
     opti.minimize(J)
     opti.subject_to(x[:, 0] == x0)
-    opti.subject_to(u[0, :] >= -2)
-    opti.subject_to(u[0, :] <= 2)
-    opti.subject_to(u[1, :] >= -2)
-    opti.subject_to(u[1, :] <= 2)
+    opti.subject_to(u[0, :] >= -5)
+    opti.subject_to(u[0, :] <= 5)
+    opti.subject_to(u[1, :] >= -10)
+    opti.subject_to(u[1, :] <= 10)
 
-    opti.set_value(x0, ca.vertcat(0, 0, 0))
+    opti.set_value(x0, ca.vertcat(1, 0, np.pi, 0, 0))
 
     p_opts = {"expand": True}
     s_opts = {
@@ -111,16 +129,24 @@ if __name__ == "__main__":
 
     ref_traj = spline_trajectory(t, spline_points)
 
+    ref_traj = np.vstack(
+        (
+            ref_traj,
+            0.0 * np.ones((1, len(t))),
+            0.0 * np.ones((1, len(t))),
+        )
+    )
+
     opti.set_value(r, ref_traj[:, : N + 1])
 
     k = 0
     start = time.time()
     x_current = opti.value(x0)
 
-    while np.linalg.norm(x_current - ref_traj[:, -1]) > 1e-3 and k < T / dt:
+    while np.linalg.norm(x_current[:3] - ref_traj[:3, -1]) > 1e-3 and k < T / dt:
         inner_start = time.time()
 
-        error = np.linalg.norm(x_current - ref_traj[:, -1])
+        error = np.linalg.norm(x_current[:3] - ref_traj[:3, -1])
 
         # horizon reference trajectory
         ref = ref_traj[:, k : N + 1 + k]
@@ -131,8 +157,8 @@ if __name__ == "__main__":
 
         opti.set_value(r, ref)
 
-        error_history[:, k] = np.linalg.norm(
-            x_current.reshape(-1, 1) - opti.value(r)[:, 0].reshape(-1, 1),
+        error_history[:3, k] = np.linalg.norm(
+            x_current[:3].reshape(-1, 1) - opti.value(r)[:3, 0].reshape(-1, 1),
             axis=1,
         )
 
@@ -160,8 +186,8 @@ if __name__ == "__main__":
     plt.title("Unicycle Trajectory Tracking w/ MPC")
     plt.grid(True)
 
-    plt.figure(figsize=(12, 8))
-    plt.subplot(2, 2, 1)
+    plt.figure(figsize=(8, 8))
+    plt.subplot(3, 3, 1)
     plt.plot(t, x_history[0, :], label="$x$")
     plt.plot(t, ref_traj[0, :], "--", label="$x_d$")
     plt.plot(t, x_history[1, :], label="$y$")
@@ -172,7 +198,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True)
 
-    plt.subplot(2, 2, 2)
+    plt.subplot(3, 3, 2)
     plt.plot(t, np.mod(ref_traj[2, :], 2 * np.pi), "--", label=r"$\theta_d$")
     plt.plot(t, np.mod(x_history[2, :], 2 * np.pi), label=r"$\theta$")
     plt.xlabel("Time [$s$]")
@@ -181,16 +207,16 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True)
 
-    plt.subplot(2, 2, 3)
-    plt.plot(t, u_history[0, :], label="$v$")
-    plt.plot(t, u_history[1, :], label=r"$\omega$")
+    plt.subplot(3, 3, 3)
+    plt.plot(t, u_history[0, :], label="$a$")
+    plt.plot(t, u_history[1, :], label=r"$\alpha$")
     plt.xlabel("Time [$s$]")
     plt.ylabel("Control Input")
     plt.title("Vehicle Control")
     plt.legend()
     plt.grid(True)
 
-    plt.subplot(2, 2, 4)
+    plt.subplot(3, 3, 4)
     plt.plot(t, error_history[0, :], label="error$_x$")
     plt.plot(t, error_history[1, :], label="error$_y$")
     plt.plot(t, error_history[2, :], label=r"error$_\theta$")
@@ -198,6 +224,21 @@ if __name__ == "__main__":
     plt.ylabel("Error [$m$]")
     plt.title("Pose error")
     plt.legend()
+    plt.grid(True)
+
+    plt.subplot(3, 3, 5)
+    plt.plot(t, x_history[3, :])
+    plt.plot(t, ref_traj[3, :], "--", color="red")
+    plt.xlabel("$t$ [$s$]")
+    plt.ylabel(r"$v$ [$\frac{m}{s}$]")
+    plt.title("Vehicle Linear Velocity")
+    plt.grid(True)
+
+    plt.subplot(3, 3, 6)
+    plt.plot(t, np.mod(x_history[4, :], 2 * np.pi))
+    plt.xlabel("$t$ [$s$]")
+    plt.ylabel(r"$\omega$ [$\frac{rad}{s}$]")
+    plt.title("Vehicle Angular Velocity")
     plt.grid(True)
 
     plt.tight_layout()
