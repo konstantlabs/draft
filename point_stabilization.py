@@ -42,7 +42,7 @@ def diff_drive_kinematics(x, u):
     return ca.vertcat(
         r / 2 * ca.cos(theta) * (u_r + u_l),
         r / 2 * ca.sin(theta) * (u_r + u_l),
-        r / (2 * d) * (u_r - u_l),
+        r / d * (u_r - u_l),
     )
 
 
