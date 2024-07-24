@@ -35,7 +35,7 @@ if __name__ == "__main__":
                 (
                     m * l * np.cos(theta) * (b * dx - m * l * dtheta**2 * np.sin(theta))
                     + (M + m) * m * l * g
-                    - m * l * np.cos(dtheta)
+                    - m * l * np.cos(dtheta) * u
                 )
                 / beta,
             ]
