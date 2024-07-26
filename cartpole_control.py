@@ -12,8 +12,8 @@ class Cartpole(ABC):
         self.m = 0.25
         self.M = 0.029 * 2
         self.b = 0.1
-        self.I = 0.006
         self.l = 0.3
+        self.I = 1 / 3 * self.m * self.l**2
         self.g = 9.8
 
     @abstractmethod
