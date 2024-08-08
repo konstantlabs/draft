@@ -12,10 +12,12 @@ casadi = "^3.6.5"
 matplotlib = "^3.9.0"
 scipy = "^1.13.1"
 pyqt6 = "^6.7.1"
+control = "^0.10.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.25.0"
 ruff = "^0.4.9"
+ipykernel = "^6.29.5"
 
 [build-system]
 requires = ["poetry-core"]
